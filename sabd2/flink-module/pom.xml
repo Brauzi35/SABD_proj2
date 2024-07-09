@@ -50,7 +50,7 @@
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.sabd2.flink.KafkaFlinkJob</mainClass>
+                                    <mainClass>com.sabd2.flink.Query1</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>
