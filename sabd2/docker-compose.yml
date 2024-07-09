@@ -1,0 +1,84 @@
+version: '3.1'
+services:
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    ports:
+      - '2181:2181'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: bitnami/kafka:latest
+    ports:
+      - '9092:9092' # internal
+      - '29092:29092' # localhost
+    container_name: kafka
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_CREATE_TOPICS='input-data:1:1'
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:29092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://localhost:29092
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=CLIENT
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    depends_on:
+      - zookeeper
+    volumes:
+      - "./sabd-kafka/target:/target"
+
+  publisher:
+    container_name: publisher
+    depends_on:
+      - kafka
+    environment:
+      TOPIC: input-data
+      ENVIRONMENT: local
+      INTERNAL_KAFKA_ADDR: 'kafka:9092'
+    build:
+      context: ./kafka-module
+      dockerfile: publisher.Dockerfile
+
+  consumer:
+    container_name: consumer
+    build:
+      context: ./kafka-module
+      dockerfile: consumer/consumer.Dockerfile
+      args:
+        - JAR_FILE=../target/kafka-module-1.0-SNAPSHOT.jar
+    environment:
+      ENVIRONMENT: local
+      INTERNAL_KAFKA_ADDR: 'kafka:9092'
+    volumes:
+      - "./Results:/output"
+    depends_on:
+      - publisher
+      - jobmanager
+
+  jobmanager:
+    image: flink:latest
+    container_name: jobmanager
+    ports:
+      - '8081:8081' 
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+        state.backend.latency-track.keyed-state-enabled: true
+    volumes:
+      - ./flink-module/target:/opt/flink/app/
+      - ./Results/output:/opt/flink/app/output
+ 
+  taskmanager:
+    image: flink:latest
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
+    depends_on:
+      - jobmanager
+
+
